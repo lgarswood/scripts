@@ -318,6 +318,30 @@ class ZabbixAPISubClass(ZabbixAPI):
             setattr(self, key, val)
             self.debug(logging.WARNING, "Set %s:%s" % (repr(key), repr(val)))
 
+    # You can join on an already-retrieved list
+    # If there is a key conflict, the second result is favoured
+    def join(self, *args, **kwargs):
+        if "using" not in kwargs.keys():
+            raise Exception("There was no join field supplied. Supply 'using='")
+        if "joinList" not in kwargs.keys():
+            raise Exception("There was no list to join to supplied. Supply 'joinList='")
+        joinField = kwargs["using"]
+        joinList = kwargs["joinList"]
+        if "filter" not in args[0].keys():
+            args[0]["filter"] = {}
+        args[0]["filter"][joinField] = [ x[joinField] for x in joinList ]
+        # Get the new result set, filtered by 'using' match
+        queryResult = self.universal("%s.%s" % (self.data["prefix"], "get"), args[0])
+        joinedList = []
+        # Create the grand dictionary of joined results
+        for fromRow in queryResult:
+            for toRow in joinList:
+                if fromRow[joinField] == toRow[joinField]:
+                    keys = list(set(fromRow.keys() + toRow.keys()))
+                    joinedRow = {key: (fromRow[key] if key in fromRow.keys() else toRow[key]) for key in keys}
+                    joinedList.append(joinedRow)
+        return joinedList
+
     def __getattr__(self, name):
         if self.data["prefix"] == "configuration" and name == "import_":  # workaround for "import" method
             name = "import"
